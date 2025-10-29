@@ -1,10 +1,9 @@
-// --- ARQUIVO: api/server.js (VERSÃO VERCEL 100% CORRIGIDA) ---
+// --- ARQUIVO: api/server.js (VERSÃO VERCEL 100% CORRIGIDA + COLD START) ---
 
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-// const cron = require('node-cron'); // Removido para Vercel
 const Mailgun = require('mailgun.js');
 const formData = require('form-data'); 
 
@@ -17,53 +16,59 @@ const COLLECTION_NAME = "agendamentos";
 const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
 const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN;
 const EMAIL_DE_ORIGEM = process.env.EMAIL_DE_ORIGEM;
-// const PORT = 3000; // Removido para Vercel
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// --- 2. O BANCO DE DADOS ---
+// --- 2. O BANCO DE DADOS (CORREÇÃO DE COLD START) ---
 let db;
+// Criamos o client UMA VEZ
+const client = new MongoClient(MONGO_URI);
+
+/**
+ * Função inteligente de conexão.
+ * Se já estiver conectado (db existe), retorna o db.
+ * Se não, conecta e DEPOIS retorna o db.
+ */
 async function connectToDB() {
+    if (db) return db; // Se já conectado, retorna a conexão
     try {
-        const client = new MongoClient(MONGO_URI);
         await client.connect();
         db = client.db(DB_NAME);
-        console.log(`Conectado ao MongoDB (${DB_NAME}) com sucesso.`);
+        console.log(`Nova conexão com o MongoDB (${DB_NAME}) estabelecida.`);
+        return db;
     } catch (err) {
         console.error("Falha ao conectar ao MongoDB:", err);
-        process.exit(1);
+        // Em vez de fechar o app, lançamos o erro para a API
+        throw new Error("Falha na conexão com o DB."); 
     }
 }
-connectToDB(); // Conecta ao iniciar
+// NÂO CHAMAMOS MAIS connectToDB() AQUI.
 
 // --- 3. O SERVIDOR WEB (API) ---
 
 // Endpoint /agendar (COM /api)
-// Endpoint /agendar (COM /api)
-app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
-    if (!db) {
-        return res.status(500).json({ error: "Banco de dados não conectado." });
-    }
+app.post('/api/agendar', async (req, res) => { 
     try {
+        // ✨ CORREÇÃO: Espera a conexão ficar pronta ANTES de continuar.
+        const dbInstance = await connectToDB(); 
+        if (!dbInstance) {
+            return res.status(500).json({ error: "Banco de dados não conectado." });
+        }
+
         const { remetenteNome, destinatario, assunto, mensagem, dataAgendada } = req.body; 
         if (!remetenteNome || !destinatario || !assunto || !mensagem) {
             return res.status(400).json({ error: "Remetente, destinatário, assunto e mensagem são obrigatórios." });
         }
 
-        // --- INÍCIO DA CORREÇÃO DE FUSO E ENVIO ---
-
         const enviarAgora = !dataAgendada; 
         let dataParaAgendar;
 
         if (enviarAgora) {
-            // 1. Se for envio imediato, apenas pega a hora UTC atual
             dataParaAgendar = new Date();
         } else {
-            // 2. Se for agendado (ex: "2025-10-29T13:00")
-            //    Nós ADICIONAMOS o fuso horário do Brasil (-03:00)
-            //    Isso força o JS a salvar o UTC correto (16:00Z)
+            // CORREÇÃO DE FUSO: Força o GMT-3
             dataParaAgendar = new Date(dataAgendada + "-03:00"); 
         }
         
@@ -76,16 +81,14 @@ app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
             status: enviarAgora ? "processando" : "pendente", 
             criadoEm: new Date()
         };
-        // --- FIM DA CORREÇÃO ---
 
-        const result = await db.collection(COLLECTION_NAME).insertOne(novoAgendamento);
+        const result = await dbInstance.collection(COLLECTION_NAME).insertOne(novoAgendamento);
         
         if (enviarAgora) {
             console.log("Envio imediato solicitado:", novoAgendamento.assunto);
             const tarefaParaEnviar = { ...novoAgendamento, _id: result.insertedId };
             await enviarEmail(tarefaParaEnviar); // Chama a função de envio
         } else {
-            // Este log agora mostrará a data UTC correta (3h a mais)
             console.log("Agendamento salvo para o futuro:", novoAgendamento.assunto, "(UTC:", dataParaAgendar.toISOString(), ")");
         }
 
@@ -98,11 +101,14 @@ app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
 });
 
 // Endpoint /historico (Com filtros e /api)
-app.get('/api/historico', async (req, res) => { // ✨ ROTA CORRIGIDA
-    if (!db) {
-        return res.status(500).json({ error: "Banco de dados não conectado." });
-    }
+app.get('/api/historico', async (req, res) => { 
     try {
+        // ✨ CORREÇÃO: Espera a conexão ficar pronta
+        const dbInstance = await connectToDB();
+        if (!dbInstance) {
+            return res.status(500).json({ error: "Banco de dados não conectado." });
+        }
+
         const { search, status, sort } = req.query;
         let query = {};
         if (status) {
@@ -119,7 +125,7 @@ app.get('/api/historico', async (req, res) => { // ✨ ROTA CORRIGIDA
         if (sort === 'antigos') {
             sortOptions = { criadoEm: 1 };
         }
-        const historico = await db.collection(COLLECTION_NAME)
+        const historico = await dbInstance.collection(COLLECTION_NAME)
             .find(query)
             .sort(sortOptions)
             .limit(50)
@@ -132,23 +138,26 @@ app.get('/api/historico', async (req, res) => { // ✨ ROTA CORRIGIDA
 });
 
 // Endpoint /concluir (COM /api)
-app.patch('/api/tarefa/:id/concluir', async (req, res) => { // ✨ ROTA CORRIGIDA
-    if (!db) {
-        return res.status(500).json({ error: "Banco de dados não conectado." });
-    }
+app.patch('/api/tarefa/:id/concluir', async (req, res) => { 
     try {
+        // ✨ CORREÇÃO: Espera a conexão ficar pronta
+        const dbInstance = await connectToDB();
+        if (!dbInstance) {
+            return res.status(500).json({ error: "Banco de dados não conectado." });
+        }
+
         const { id } = req.params;
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({ error: "ID inválido." });
         }
-        const tarefa = await db.collection(COLLECTION_NAME).findOne({ _id: new ObjectId(id) });
+        const tarefa = await dbInstance.collection(COLLECTION_NAME).findOne({ _id: new ObjectId(id) });
         if (!tarefa) {
             return res.status(404).json({ error: "Tarefa não encontrada." });
         }
         if (tarefa.status === 'concluida') {
             return res.status(200).json({ message: "Tarefa já estava concluída." });
         }
-        await db.collection(COLLECTION_NAME).updateOne(
+        await dbInstance.collection(COLLECTION_NAME).updateOne(
             { _id: tarefa._id },
             { $set: { status: "concluida" } }
         );
@@ -164,16 +173,19 @@ app.patch('/api/tarefa/:id/concluir', async (req, res) => { // ✨ ROTA CORRIGID
 });
 
 // Endpoint de Exclusão (COM /api)
-app.delete('/api/tarefa/:id', async (req, res) => { // ✨ ROTA CORRIGIDA
-    if (!db) {
-        return res.status(500).json({ error: "Banco de dados não conectado." });
-    }
+app.delete('/api/tarefa/:id', async (req, res) => { 
     try {
+        // ✨ CORREÇÃO: Espera a conexão ficar pronta
+        const dbInstance = await connectToDB();
+        if (!dbInstance) {
+            return res.status(500).json({ error: "Banco de dados não conectado." });
+        }
+
         const { id } = req.params;
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({ error: "ID inválido." });
         }
-        const result = await db.collection(COLLECTION_NAME).deleteOne({ _id: new ObjectId(id) });
+        const result = await dbInstance.collection(COLLECTION_NAME).deleteOne({ _id: new ObjectId(id) });
         if (result.deletedCount === 0) {
             return res.status(404).json({ error: "Tarefa não encontrada para exclusão." });
         }
@@ -185,12 +197,23 @@ app.delete('/api/tarefa/:id', async (req, res) => { // ✨ ROTA CORRIGIDA
     }
 });
 
-// Endpoint para o Cron Job da Vercel (Já estava correto)
+// Endpoint para o Cron Job da Vercel
 app.get('/api/cron', async (req, res) => {
-    console.log("Cron Job da Vercel iniciado...");
-    // Você pode adicionar uma chave de segurança aqui depois
-    await verificarEEnviarEmails(); 
-    res.status(200).json({ message: "Cron job executado." });
+    // PROTEÇÃO (Opcional, mas recomendado - se você usa senha)
+    // const authHeader = req.headers.authorization; 
+    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    //     console.warn("CRON: Tentativa de acesso não autorizada.");
+    //     return res.status(401).json({ error: "Unauthorized" });
+    // }
+    
+    console.log("Cron Job iniciado...");
+    try {
+        await verificarEEnviarEmails(); 
+        res.status(200).json({ message: "Cron job executado." });
+    } catch (err) {
+        console.error("Erro na execução do Cron:", err);
+        res.status(500).json({ error: "Erro interno no Cron.", details: err.message });
+    }
 });
 
 
@@ -202,6 +225,7 @@ const mgClient = mailgun.client({
     key: MAILGUN_API_KEY
 });
 
+// A função gerarTemplateHTML permanece a mesma...
 function gerarTemplateHTML(assunto, mensagem) {
     const mensagemFormatada = mensagem.replace(/\n/g, '<br>');
     return `
@@ -334,11 +358,13 @@ async function enviarEmailConclusao(tarefa) {
         'h:References': tarefa.mailgunMessageId
     };
     try {
+        // ✨ CORREÇÃO: Assegura que o db existe antes de usar (embora esta fn não use)
+        // Mas é boa prática se o mgClient dependesse do db.
         const result = await mgClient.messages.create(MAILGUN_DOMAIN, messageData);
         console.log(`E-mail de conclusão enviado com sucesso! ID: ${result.id}`);
     } catch (err) {
         console.error("Falha ao enviar e-mail de conclusão:", err.message);
-A   }
+    }
 }
 
 async function enviarEmail(tarefa) {
@@ -352,9 +378,12 @@ async function enviarEmail(tarefa) {
         html: corpoHTMLEmail
     };
     try {
+        // ✨ CORREÇÃO: Espera a conexão ficar pronta
+        const dbInstance = await connectToDB();
+
         const result = await mgClient.messages.create(MAILGUN_DOMAIN, messageData);
         console.log("Email enviado com sucesso!", result.id);
-        await db.collection(COLLECTION_NAME).updateOne(
+        await dbInstance.collection(COLLECTION_NAME).updateOne(
             { _id: tarefa._id },
             { $set: { 
                 status: "enviado", 
@@ -365,30 +394,37 @@ async function enviarEmail(tarefa) {
         );
     } catch (err) {
         console.error("Erro ao enviar e-mail (Mailgun):", err.message);
-        await db.collection(COLLECTION_NAME).updateOne(
-            { _id: tarefa._id },
-            { $set: { status: "erro", erroMsg: err.message } }
-       );
+        
+        // Tenta reconectar se o erro for de DB
+        const dbInstance = await connectToDB();
+        if (dbInstance) {
+            await dbInstance.collection(COLLECTION_NAME).updateOne(
+                { _id: tarefa._id },
+                { $set: { status: "erro", erroMsg: err.message } }
+           );
+        }
     }
 }
 
 // --- 5. O AGENDADOR (CRON JOB) ---
-// A função de verificação fica, mas o agendador (cron.schedule) é removido
 async function verificarEEnviarEmails() {
-    if (!db) {
+    // ✨ CORREÇÃO: Espera a conexão ficar pronta
+    const dbInstance = await connectToDB();
+    if (!dbInstance) {
         console.log("Cron: Conexão com DB ainda não estabelecida.");
-        return; 
+        return; // Sai se não conseguir conectar
     }
-    const agora = new Date();
-    const tarefasPendentes = await db.collection(COLLECTION_NAME).find({
+    
+    const agora = new Date(); // Esta data está em UTC (correto)
+    const tarefasPendentes = await dbInstance.collection(COLLECTION_NAME).find({
         status: "pendente",
-        dataAgendada: { $lte: agora }
+        dataAgendada: { $lte: agora } // Compara UTC com UTC (correto)
     }).toArray();
 
     if (tarefasPendentes.length > 0) {
         console.log(`Cron: Encontradas ${tarefasPendentes.length} tarefas pendentes.`);
         for (const tarefa of tarefasPendentes) {
-            await db.collection(COLLECTION_NAME).updateOne(
+            await dbInstance.collection(COLLECTION_NAME).updateOne(
                 { _id: tarefa._id },
               { $set: { status: "processando" } }
             );
@@ -400,7 +436,5 @@ async function verificarEEnviarEmails() {
 }
 
 // --- 6. INICIALIZAÇÃO ---
-// REMOVIDO "startServer" e "app.listen"
-
-// ✨✨✨ ADICIONADO: EXPORTA O APP PARA A VERCEL ✨✨✨
+// EXPORTA O APP PARA A VERCEL
 module.exports = app;
