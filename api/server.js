@@ -50,6 +50,12 @@ app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
         if (!remetenteNome || !destinatario || !assunto || !mensagem) {
             return res.status(400).json({ error: "Remetente, destinatário, assunto e mensagem são obrigatórios." });
         }
+
+        // --- NOVA LÓGICA DE ENVIO ---
+
+        // Se dataAgendada estiver vazia (string vazia) ou nula, é para enviar agora.
+        const enviarAgora = !dataAgendada; 
+        
         const dataParaAgendar = dataAgendada ? new Date(dataAgendada) : new Date();
         const novoAgendamento = {
             remetenteNome,
@@ -57,12 +63,26 @@ app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
             assunto,
             mensagem,
             dataAgendada: dataParaAgendar,
-            status: "pendente",
+            // Se for enviar agora, o status inicial é "processando". Senão, "pendente".
+            status: enviarAgora ? "processando" : "pendente", 
             criadoEm: new Date()
         };
-        await db.collection(COLLECTION_NAME).insertOne(novoAgendamento);
-        console.log("Novo agendamento salvo:", novoAgendamento.assunto);
+
+        // 1. Salva no banco de QUALQUER JEITO
+        const result = await db.collection(COLLECTION_NAME).insertOne(novoAgendamento);
+        
+        // 2. Se for para enviar agora, chama o carteiro imediatamente!
+        if (enviarAgora) {
+            console.log("Envio imediato solicitado:", novoAgendamento.assunto);
+            // Criamos o objeto "tarefa" completo para enviar ao carteiro
+            const tarefaParaEnviar = { ...novoAgendamento, _id: result.insertedId };
+            await enviarEmail(tarefaParaEnviar); // Chama a função de envio
+        } else {
+            console.log("Novo agendamento salvo para o futuro:", novoAgendamento.assunto);
+        }
+
         res.status(201).json({ message: "Agendamento salvo com sucesso!" });
+
     } catch (err) {
         console.error("Erro ao salvar agendamento:", err);
         res.status(500).json({ error: "Erro interno ao salvar." });
