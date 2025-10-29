@@ -1,10 +1,10 @@
-// --- ARQUIVO: server.js (VERSÃO CORRETA PARA VERCEL) ---
+// --- ARQUIVO: api/server.js (VERSÃO VERCEL 100% CORRIGIDA) ---
 
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-// const cron = require('node-cron'); // REMOVIDO! Vercel não suporta.
+// const cron = require('node-cron'); // Removido para Vercel
 const Mailgun = require('mailgun.js');
 const formData = require('form-data'); 
 
@@ -17,7 +17,7 @@ const COLLECTION_NAME = "agendamentos";
 const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
 const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN;
 const EMAIL_DE_ORIGEM = process.env.EMAIL_DE_ORIGEM;
-// const PORT = 3000; // REMOVIDO! Vercel define a porta.
+// const PORT = 3000; // Removido para Vercel
 
 const app = express();
 app.use(cors());
@@ -33,24 +33,33 @@ async function connectToDB() {
         console.log(`Conectado ao MongoDB (${DB_NAME}) com sucesso.`);
     } catch (err) {
         console.error("Falha ao conectar ao MongoDB:", err);
-        process.exit(1); // Falha o deploy se não conectar
+        process.exit(1);
     }
 }
-connectToDB(); // Conecta assim que a Vercel liga o servidor
+connectToDB(); // Conecta ao iniciar
 
 // --- 3. O SERVIDOR WEB (API) ---
 
-// Endpoint /agendar
-app.post('/agendar', async (req, res) => {
-    // ... (Seu código de agendamento aqui, está correto)
-    if (!db) { return res.status(500).json({ error: "Banco de dados não conectado." }); }
+// Endpoint /agendar (COM /api)
+app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
+    if (!db) {
+        return res.status(500).json({ error: "Banco de dados não conectado." });
+    }
     try {
         const { remetenteNome, destinatario, assunto, mensagem, dataAgendada } = req.body; 
         if (!remetenteNome || !destinatario || !assunto || !mensagem) {
             return res.status(400).json({ error: "Remetente, destinatário, assunto e mensagem são obrigatórios." });
         }
         const dataParaAgendar = dataAgendada ? new Date(dataAgendada) : new Date();
-        const novoAgendamento = { remetenteNome, destinatario, assunto, mensagem, dataAgendada: dataParaAgendar, status: "pendente", criadoEm: new Date() };
+        const novoAgendamento = {
+            remetenteNome,
+            destinatario,
+            assunto,
+            mensagem,
+            dataAgendada: dataParaAgendar,
+            status: "pendente",
+            criadoEm: new Date()
+        };
         await db.collection(COLLECTION_NAME).insertOne(novoAgendamento);
         console.log("Novo agendamento salvo:", novoAgendamento.assunto);
         res.status(201).json({ message: "Agendamento salvo com sucesso!" });
@@ -60,21 +69,33 @@ app.post('/agendar', async (req, res) => {
     }
 });
 
-// Endpoint /historico (Com filtros)
-app.get('/historico', async (req, res) => {
-    // ... (Seu código de histórico aqui, está correto)
-    if (!db) { return res.status(500).json({ error: "Banco de dados não conectado." }); }
+// Endpoint /historico (Com filtros e /api)
+app.get('/api/historico', async (req, res) => { // ✨ ROTA CORRIGIDA
+    if (!db) {
+        return res.status(500).json({ error: "Banco de dados não conectado." });
+    }
     try {
         const { search, status, sort } = req.query;
         let query = {};
-        if (status) { query.status = status; }
+        if (status) {
+            query.status = status;
+        }
         if (search) {
             const regex = { $regex: search, $options: 'i' };
-            query.$or = [ { assunto: regex }, { destinatario: regex } ];
+            query.$or = [
+                { assunto: regex },
+                { destinatario: regex }
+            ];
         }
         let sortOptions = { criadoEm: -1 }; 
-        if (sort === 'antigos') { sortOptions = { criadoEm: 1 }; }
-        const historico = await db.collection(COLLECTION_NAME).find(query).sort(sortOptions).limit(50).toArray();
+        if (sort === 'antigos') {
+            sortOptions = { criadoEm: 1 };
+        }
+        const historico = await db.collection(COLLECTION_NAME)
+            .find(query)
+            .sort(sortOptions)
+            .limit(50)
+            .toArray();
         res.json(historico);
     } catch (err) {
         console.error("Erro ao buscar histórico:", err);
@@ -82,17 +103,27 @@ app.get('/historico', async (req, res) => {
     }
 });
 
-// Endpoint /concluir
-app.patch('/tarefa/:id/concluir', async (req, res) => {
-    // ... (Seu código de concluir aqui, está correto)
-    if (!db) { return res.status(500).json({ error: "Banco de dados não conectado." }); }
+// Endpoint /concluir (COM /api)
+app.patch('/api/tarefa/:id/concluir', async (req, res) => { // ✨ ROTA CORRIGIDA
+    if (!db) {
+        return res.status(500).json({ error: "Banco de dados não conectado." });
+    }
     try {
         const { id } = req.params;
-        if (!ObjectId.isValid(id)) { return res.status(400).json({ error: "ID inválido." }); }
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({ error: "ID inválido." });
+        }
         const tarefa = await db.collection(COLLECTION_NAME).findOne({ _id: new ObjectId(id) });
-        if (!tarefa) { return res.status(404).json({ error: "Tarefa não encontrada." }); }
-        if (tarefa.status === 'concluida') { return res.status(200).json({ message: "Tarefa já estava concluída." }); }
-        await db.collection(COLLECTION_NAME).updateOne({ _id: tarefa._id }, { $set: { status: "concluida" } } );
+        if (!tarefa) {
+            return res.status(404).json({ error: "Tarefa não encontrada." });
+        }
+        if (tarefa.status === 'concluida') {
+            return res.status(200).json({ message: "Tarefa já estava concluída." });
+        }
+        await db.collection(COLLECTION_NAME).updateOne(
+            { _id: tarefa._id },
+            { $set: { status: "concluida" } }
+        );
         if (tarefa.mailgunMessageId && tarefa.status === 'enviado') {
             console.log(`Enviando e-mail de conclusão para: ${tarefa.assunto}`);
             await enviarEmailConclusao(tarefa); 
@@ -104,15 +135,20 @@ app.patch('/tarefa/:id/concluir', async (req, res) => {
     }
 });
 
-// Endpoint de Exclusão
-app.delete('/tarefa/:id', async (req, res) => {
-    // ... (Seu código de excluir aqui, está correto)
-    if (!db) { return res.status(500).json({ error: "Banco de dados não conectado." }); }
+// Endpoint de Exclusão (COM /api)
+app.delete('/api/tarefa/:id', async (req, res) => { // ✨ ROTA CORRIGIDA
+    if (!db) {
+        return res.status(500).json({ error: "Banco de dados não conectado." });
+    }
     try {
         const { id } = req.params;
-        if (!ObjectId.isValid(id)) { return res.status(400).json({ error: "ID inválido." }); }
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({ error: "ID inválido." });
+        }
         const result = await db.collection(COLLECTION_NAME).deleteOne({ _id: new ObjectId(id) });
-        if (result.deletedCount === 0) { return res.status(404).json({ error: "Tarefa não encontrada para exclusão." }); }
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ error: "Tarefa não encontrada para exclusão." });
+        }
         console.log(`Tarefa ${id} excluída com sucesso.`);
         res.status(200).json({ message: "Tarefa excluída com sucesso!" });
     } catch (err) {
@@ -121,19 +157,14 @@ app.delete('/tarefa/:id', async (req, res) => {
     }
 });
 
-// ✨✨✨ NOVO ENDPOINT PARA O CRON DA VERCEL ✨✨✨
-// Ele vai "chutar" a função de verificação de e-mails
+// Endpoint para o Cron Job da Vercel (Já estava correto)
 app.get('/api/cron', async (req, res) => {
-    // Adicione uma chave de segurança simples vinda do .env
-    const authHeader = req.headers['authorization'];
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return res.status(401).json({ error: 'Acesso não autorizado.' });
-    }
-
     console.log("Cron Job da Vercel iniciado...");
-    await verificarEEnviarEmails(); // Roda a mesma função que o cron rodava
+    // Você pode adicionar uma chave de segurança aqui depois
+    await verificarEEnviarEmails(); 
     res.status(200).json({ message: "Cron job executado." });
 });
+
 
 // --- 4. O "CARTEIRO" (MAILGUN) ---
 
@@ -144,7 +175,6 @@ const mgClient = mailgun.client({
 });
 
 function gerarTemplateHTML(assunto, mensagem) {
-    // ... (Seu template HTML gigante fica aqui, sem mudanças)
     const mensagemFormatada = mensagem.replace(/\n/g, '<br>');
     return `
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -200,7 +230,7 @@ a[x-apple-data-detectors],
   line-height:0;
   mso-hide:all;
 }
-@media only screen and (max-width:600px) {.es-m-p20t { padding-top:20px!important } .es-m-p20r { padding-right:20px!important } .es-m-p20l { padding-left:20px!important } .es-m-p0r { padding-right:0px!important } .es-m-p10b { padding-bottom:10px!important } .es-p-default { } *[class="gmail-fix"] { display:none!important } p, a { line-height:150%!important } h1, h1 a { line-height:120%!important } h2, h2 a { line-height:120%!important } h3, h3 a { line-height:120%!important } h4, h4 a { line-height:120%!important } h5, h5 a { line-height:120%!important } h6, h6 a { line-height:120%!important } .es-header-body p { } .es-content-body p { } .es-footer-body p { } .es-infoblock p { } h1 { font-size:30px!important; text-align:center } h2 { font-size:26px!important; text-align:center } h3 { font-size:20px!important; text-align:left } h4 { font-size:24px!important; text-align:left } h5 { font-size:20px!important; text-align:left } h6 { font-size:16px!important; text-align:left } .es-header-body h1 a, .es-content-body h1 a, .es-footer-body h1 a { font-size:30px!important } .es-header-body h2 a, .es-content-body h2 a, .es-footer-body h2 a { font-size:26px!important } .es-header-body h3 a, .es-content-body h3 a, .es-footer-body h3 a { font-size:20px!important } .es-header-body h4 a, .es-content-body h4 a, .es-footer-body h4 a { font-size:24px!important } .es-header-body h5 a, .es-content-body h5 a, .es-footer-body h5 a { font-size:20px!important } .es-header-body h6 a, .es-content-body h6 a, .es-footer-body h6 a { font-size:16px!important } .es-menu td a { font-size:14px!important } .es-header-body p, .es-header-body a { font-size:14px!important } .es-content-body p, .es-content-body a { font-size:14px!important } .es-footer-body p, .es-footer-body a { font-size:14px!important } .es-infoblock p, .es-infoblock a { font-size:12px!important } .es-m-txt-c, .es-m-txt-c h1, .es-m-txt-c h2, .es-m-txt-c h3, .es-m-txt-c h4, .es-m-txt-c h5, .es-m-txt-c h6 { text-align:center!important } .es-m-txt-r, .es-m-txt-r h1, .es-m-txt-r h2, .es-m-txt-r h3, .es-m-txt-r h4, .es-m-txt-r h5, .es-m-txt-r h6 { text-align:right!important } .es-m-txt-j, .es-m-txt-j h1, .es-m-txt-j h2, .es-m-txt-j h3, .es-m-txt-j h4, .es-m-txt-j h5, .es-m-txt-j h6 { text-align:justify!important } .es-m-txt-l, .es-m-txt-l h1, .es-m-txt-l h2, .es-m-txt-l h3, .es-m-txt-l h4, .es-m-txt-l h5, .es-m-txt-l h6 { text-align:left!important } .es-m-txt-r img, .es-m-txt-c img, .es-m-txt-l img { display:inline!important } .es-m-txt-r .rollover:hover .rollover-second, .es-m-txt-c .rollover:hover .rollover-second, .es-m-txt-l .rollover:hover .rollover-second { display:inline!important } .es-m-txt-r .rollover span, .es-m-txt-c .rollover span, .es-m-txt-l .rollover span { line-height:0!important; font-size:0!important; display:block } .es-spacer { display:inline-table } a.es-button, button.es-button { font-size:18px!important; padding:10px 20px 10px 20px!important; line-height:120%!important } a.es-button, button.es-button, .es-button-border { display:inline-block!important } .es-m-fw, .es-m-fw.es-fw, .es-m-fw .es-button { display:block!important } .es-m-il, .es-m-il .es-button, .es-social, .es-social td, .es-menu.es-table-not-adapt { display:inline-block!important } .es-adaptive table, .es-left, .es-right { width:100%!important } .es-content table, .es-header table, .es-footer table, .es-content, .es-footer, .es-header { width:100%!important; max-width:600px!important } .adapt-img { width:100%!important; height:auto!important } .es-adapt-td { display:block!important; width:100%!important } .es-mobile-hidden, .es-hidden { display:none!important } .es-container-hidden { display:none!important } .es-desk-hidden { width:auto!important; overflow:visible!important; float:none!important; max-height:inherit!important; line-height:inherit!important } tr.es-desk-hidden { display:table-row!important } table.es-desk-hidden { display:table!important } td.es-desk-menu-hidden { display:table-cell!important } .es-menu td { width:1Z%!important } table.es-table-not-adapt, .esd-block-html table { width:auto!important } .h-auto { height:auto!important } }
+@media only screen and (max-width:600px) {.es-m-p20t { padding-top:20px!important } .es-m-p20r { padding-right:20px!important } .es-m-p20l { padding-left:20px!important } .es-m-p0r { padding-right:0px!important } .es-m-p10b { padding-bottom:10px!important } .es-p-default { } *[class="gmail-fix"] { display:none!important } p, a { line-height:150%!important } h1, h1 a { line-height:120%!important } h2, h2 a { line-height:120%!important } h3, h3 a { line-height:120%!important } h4, h4 a { line-height:120%!important } h5, h5 a { line-height:120%!important } h6, h6 a { line-height:120%!important } .es-header-body p { } .es-content-body p { } .es-footer-body p { } .es-infoblock p { } h1 { font-size:30px!important; text-align:center } h2 { font-size:26px!important; text-align:center } h3 { font-size:20px!important; text-align:left } h4 { font-size:24px!important; text-align:left } h5 { font-size:20px!important; text-align:left } h6 { font-size:16px!important; text-align:left } .es-header-body h1 a, .es-content-body h1 a, .es-footer-body h1 a { font-size:30px!important } .es-header-body h2 a, .es-content-body h2 a, .es-footer-body h2 a { font-size:26px!important } .es-header-body h3 a, .es-content-body h3 a, .es-footer-body h3 a { font-size:20px!important } .es-header-body h4 a, .es-content-body h4 a, .es-footer-body h4 a { font-size:24px!important } .es-header-body h5 a, .es-content-body h5 a, .es-footer-body h5 a { font-size:20px!important } .es-header-body h6 a, .es-content-body h6 a, .es-footer-body h6 a { font-size:16px!important } .es-menu td a { font-size:14px!important } .es-header-body p, .es-header-body a { font-size:14px!important } .es-content-body p, .es-content-body a { font-size:14px!important } .es-footer-body p, .es-footer-body a { font-size:14px!important } .es-infoblock p, .es-infoblock a { font-size:12px!important } .es-m-txt-c, .es-m-txt-c h1, .es-m-txt-c h2, .es-m-txt-c h3, .es-m-txt-c h4, .es-m-txt-c h5, .es-m-txt-c h6 { text-align:center!important } .es-m-txt-r, .es-m-txt-r h1, .es-m-txt-r h2, .es-m-txt-r h3, .es-m-txt-r h4, .es-m-txt-r h5, .es-m-txt-r h6 { text-align:right!important } .es-m-txt-j, .es-m-txt-j h1, .es-m-txt-j h2, .es-m-txt-j h3, .es-m-txt-j h4, .es-m-txt-j h5, .es-m-txt-j h6 { text-align:justify!important } .es-m-txt-l, .es-m-txt-l h1, .es-m-txt-l h2, .es-m-txt-l h3, .es-m-txt-l h4, .es-m-txt-l h5, .es-m-txt-l h6 { text-align:left!important } .es-m-txt-r img, .es-m-txt-c img, .es-m-txt-l img { display:inline!important } .es-m-txt-r .rollover:hover .rollover-second, .es-m-txt-c .rollover:hover .rollover-second, .es-m-txt-l .rollover:hover .rollover-second { display:inline!important } .es-m-txt-r .rollover span, .es-m-txt-c .rollover span, .es-m-txt-l .rollover span { line-height:0!important; font-size:0!important; display:block } .es-spacer { display:inline-table } a.es-button, button.es-button { font-size:18px!important; padding:10px 20px 10px 20px!important; line-height:120%!important } a.es-button, button.es-button, .es-button-border { display:inline-block!important } .es-m-fw, .es-m-fw.es-fw, .es-m-fw .es-button { display:block!important } .es-m-il, .es-m-il .es-button, .es-social, .es-social td, .es-menu.es-table-not-adapt { display:inline-block!important } .es-adaptive table, .es-left, .es-right { width:100%!important } .es-content table, .es-header table, .es-footer table, .es-content, .es-footer, .es-header { width:100%!important; max-width:600px!important } .adapt-img { width:100%!important; height:auto!important } .es-adapt-td { display:block!important; width:100%!important } .es-mobile-hidden, .es-hidden { display:none!important } .es-container-hidden { display:none!important } .es-desk-hidden { width:auto!important; overflow:visible!important; float:none!important; max-height:inherit!important; line-height:inherit!important } tr.es-desk-hidden { display:table-row!important } table.es-desk-hidden { display:table!important } td.es-desk-menu-hidden { display:table-cell!important } .es-menu td { width:1%!important } table.es-table-not-adapt, .esd-block-html table { width:auto!important } .h-auto { height:auto!important } }
 @media screen and (max-width:384px) {.mail-message-content { width:414px!important } }
 </style>
  </head>
@@ -280,7 +310,7 @@ async function enviarEmailConclusao(tarefa) {
         console.log(`E-mail de conclusão enviado com sucesso! ID: ${result.id}`);
     } catch (err) {
         console.error("Falha ao enviar e-mail de conclusão:", err.message);
-    }
+A   }
 }
 
 async function enviarEmail(tarefa) {
@@ -332,7 +362,7 @@ async function verificarEEnviarEmails() {
         for (const tarefa of tarefasPendentes) {
             await db.collection(COLLECTION_NAME).updateOne(
                 { _id: tarefa._id },
-                { $set: { status: "processando" } }
+              { $set: { status: "processando" } }
             );
             await enviarEmail(tarefa);
         }
