@@ -92,7 +92,8 @@
             if (sort) params.append('sort', sort);
 
             try {
-                const response = await fetch(`http://localhost:3000/historico?${params.toString()}`);
+                // ✨✨✨ ROTA CORRIGIDA (1/3) ✨✨✨
+                const response = await fetch(`/api/historico?${params.toString()}`);
                 if (!response.ok) throw new Error('Falha ao buscar dados.');
 
                 const tarefas = await response.json();
@@ -119,7 +120,7 @@
                         `;
                     }
 
-                    // ✨ NOVO: Botão de Excluir (sempre aparece) ✨
+                    // Botão de Excluir (sempre aparece)
                     botoesAcao += `
                         <button data-id="${tarefa._id}"
                                 title="Excluir este agendamento"
@@ -157,7 +158,6 @@
 
         // --- Event listener PRINCIPAL (agora lida com Concluir e Excluir) ---
         document.getElementById('listaHistorico').addEventListener('click', async (e) => {
-            // Encontra o botão que foi clicado (seja o ícone ou o botão em si)
             const concluirButton = e.target.closest('.btn-concluir');
             const excluirButton = e.target.closest('.btn-excluir');
 
@@ -167,39 +167,36 @@
                 try {
                     concluirButton.disabled = true;
                     concluirButton.textContent = 'Marcando...';
-                    const response = await fetch(`http://localhost:3000/tarefa/${id}/concluir`, { method: 'PATCH' });
+                    // ✨✨✨ ROTA CORRIGIDA (2/3) ✨✨✨
+                    const response = await fetch(`/api/tarefa/${id}/concluir`, { method: 'PATCH' });
                     if (!response.ok) throw new Error('Falha ao atualizar.');
                     carregarHistorico();
                 } catch (error) {
                     console.error('Erro ao marcar como concluída:', error);
                     concluirButton.textContent = 'Erro!';
-                    // Re-habilita o botão em caso de erro para tentar de novo
                     concluirButton.disabled = false;
                 }
             }
 
-            // ✨ NOVO: Ação: Excluir Tarefa ✨
+            // Ação: Excluir Tarefa
             if (excluirButton) {
                 const id = excluirButton.dataset.id;
 
-                // 1. Confirmação (super importante!)
                 if (!confirm("Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.")) {
-                    return; // Cancela se o usuário clicar em "Cancelar"
+                    return; 
                 }
 
                 try {
-                    // Desabilita o botão para evitar clique duplo
                     excluirButton.disabled = true;
-                    // Mostra um feedback visual
                     excluirButton.innerHTML = `
                       <svg class="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                    `; // Ícone de loading
+                    `; 
 
-                    // 2. Chama o novo endpoint DELETE no server.js
-                    const response = await fetch(`http://localhost:3000/tarefa/${id}`, {
+                    // ✨✨✨ ROTA CORRIGIDA (3/3) ✨✨✨
+                    const response = await fetch(`/api/tarefa/${id}`, {
                         method: 'DELETE'
                     });
 
@@ -207,14 +204,12 @@
                         const errorData = await response.json();
                         throw new Error(errorData.error || 'Falha ao excluir.');
                     }
-
-                    // 3. Sucesso! Recarrega o histórico para mostrar a lista atualizada
+                    
                     carregarHistorico();
 
                 } catch (error) {
                     console.error('Erro ao excluir tarefa:', error);
-                    alert(`Erro ao excluir: ${error.message}`); // Mostra um alerta de erro
-                    // Re-habilita o botão e restaura o ícone em caso de erro
+                    alert(`Erro ao excluir: ${error.message}`); 
                     excluirButton.disabled = false;
                     excluirButton.innerHTML = `
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">

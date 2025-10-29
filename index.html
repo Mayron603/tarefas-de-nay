@@ -120,7 +120,7 @@ Tudo bem? Preciso que você me envie a atividade de Saúde da Criança e do Adol
 
       try {
         // ✨✨✨ ROTA CORRIGIDA PARA A VERCEL ✨✨✨
-        const response = await fetch('/api/agendar', { // Removido 'http://localhost:3000' e adicionado '/api'
+        const response = await fetch('/api/agendar', { // Rota corrigida!
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
@@ -129,7 +129,7 @@ Tudo bem? Preciso que você me envie a atividade de Saúde da Criança e do Adol
         if (response.ok) {
           statusEl.className = 'p-4 rounded-md font-medium text-center bg-green-100 text-green-800';
           statusEl.textContent = '✅ Agendamento salvo com sucesso!';
-          document.getElementById('formAgendamento').reset();
+          document.getElementById('formAgendamento').reset(); // Mantém os valores padrão
         } else {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Falha ao salvar.');
