@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico de Envios</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full">
+    <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold tracking-tight text-gray-900">
+                Histórico de Agendamentos
+            </h1>
+            <a href="index.html" class="text-sm font-medium text-blue-600 hover:text-blue-500">
+                &larr; Voltar para Agendamento
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6 p-4 bg-white rounded-xl shadow-md border border-gray-200">
+            <div class="sm:col-span-2">
+                <label for="searchInput" class="block text-sm font-medium text-gray-700">Pesquisar</label>
+                <input type="text" id="searchInput" placeholder="Assunto ou destinatário..."
+                       class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="statusSelect" class="block text-sm font-medium text-gray-700">Status</label>
+                <select id="statusSelect"
+                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Todos os Status</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="enviado">Enviado</option>
+                    <option value="concluida">Concluída</option>
+                    <option value="erro">Erro</option>
+                </select>
+            </div>
+            <div>
+                <label for="sortSelect" class="block text-sm font-medium text-gray-700">Organizar por</label>
+                <select id="sortSelect"
+                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="recentes">Mais Recentes</option>
+                    <option value="antigos">Mais Antigos</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center text-gray-500 font-medium">
+            Carregando histórico...
+        </div>
+
+        <div id="listaHistorico" class="bg-white shadow-xl rounded-xl overflow-hidden">
+            <ul role="list" class="divide-y divide-gray-200">
+                </ul>
+        </div>
+    </div>
+
+    <script>
+        // Pega os elementos de filtro
+        const searchInput = document.getElementById('searchInput');
+        const statusSelect = document.getElementById('statusSelect');
+        const sortSelect = document.getElementById('sortSelect');
+        const listaEl = document.getElementById('listaHistorico');
+        const loadingEl = document.getElementById('loading');
+
+        // Funções formatarData e getStatusBadge (sem mudanças)
+        function formatarData(isoString) {
+            if (!isoString) return 'N/A';
+            const data = new Date(isoString);
+            return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        function getStatusBadge(status) {
+             switch (status) {
+                case 'pendente': return `<span class="inline-flex items-center rounded-md bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pendente</span>`;
+                case 'enviado': return `<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Enviado</span>`;
+                case 'erro': return `<span class="inline-flex items-center rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Falhou</span>`;
+                case 'concluida': return `<span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Concluída</span>`;
+                default: return `<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">${status}</span>`;
+            }
+        }
+
+        // --- Função principal de carregar o histórico (ATUALIZADA) ---
+        async function carregarHistorico() {
+            listaEl.innerHTML = '';
+            loadingEl.style.display = 'block';
+
+            const search = searchInput.value;
+            const status = statusSelect.value;
+            const sort = sortSelect.value;
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            if (status) params.append('status', status);
+            if (sort) params.append('sort', sort);
+
+            try {
+                const response = await fetch(`http://localhost:3000/historico?${params.toString()}`);
+                if (!response.ok) throw new Error('Falha ao buscar dados.');
+
+                const tarefas = await response.json();
+                loadingEl.style.display = 'none';
+
+                if (tarefas.length === 0) {
+                    listaEl.innerHTML = '<li class="p-6 text-center text-gray-500 font-medium">Nenhum agendamento encontrado para estes filtros.</li>';
+                    return;
+                }
+
+                tarefas.forEach(tarefa => {
+                    const li = document.createElement('li');
+                    li.className = 'p-4 sm:p-6 hover:bg-gray-50';
+
+                    let botoesAcao = ''; // Container para os botões
+
+                    // Botão de Concluir (se aplicável)
+                    if (tarefa.status === 'enviado') {
+                        botoesAcao += `
+                            <button data-id="${tarefa._id}"
+                                    class="btn-concluir rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                                Marcar como Concluída
+                            </button>
+                        `;
+                    }
+
+                    // ✨ NOVO: Botão de Excluir (sempre aparece) ✨
+                    botoesAcao += `
+                        <button data-id="${tarefa._id}"
+                                title="Excluir este agendamento"
+                                class="btn-excluir ml-2 text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09 1.02-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                        </button>
+                    `;
+
+
+                    li.innerHTML = `
+                        <div class="flex items-center justify-between flex-wrap">
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-bold text-blue-600">${tarefa.assunto}</p>
+                                <p class="mt-1 truncate text-sm text-gray-500">Para: ${tarefa.destinatario}</p>
+                                <p class="mt-1 text-xs text-gray-400">Agendado para: ${formatarData(tarefa.dataAgendada)}</p>
+                            </div>
+                            <div class="ml-4 flex-shrink-0 flex flex-col sm:flex-row items-end sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                                ${getStatusBadge(tarefa.status)}
+                                <div class="flex items-center">
+                                    ${botoesAcao}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    listaEl.appendChild(li);
+                });
+
+            } catch (error) {
+                loadingEl.textContent = 'Erro ao carregar histórico: ' + error.message;
+                loadingEl.style.color = 'red';
+            }
+        }
+
+        // --- Event listener PRINCIPAL (agora lida com Concluir e Excluir) ---
+        document.getElementById('listaHistorico').addEventListener('click', async (e) => {
+            // Encontra o botão que foi clicado (seja o ícone ou o botão em si)
+            const concluirButton = e.target.closest('.btn-concluir');
+            const excluirButton = e.target.closest('.btn-excluir');
+
+            // Ação: Marcar como Concluída
+            if (concluirButton) {
+                const id = concluirButton.dataset.id;
+                try {
+                    concluirButton.disabled = true;
+                    concluirButton.textContent = 'Marcando...';
+                    const response = await fetch(`http://localhost:3000/tarefa/${id}/concluir`, { method: 'PATCH' });
+                    if (!response.ok) throw new Error('Falha ao atualizar.');
+                    carregarHistorico();
+                } catch (error) {
+                    console.error('Erro ao marcar como concluída:', error);
+                    concluirButton.textContent = 'Erro!';
+                    // Re-habilita o botão em caso de erro para tentar de novo
+                    concluirButton.disabled = false;
+                }
+            }
+
+            // ✨ NOVO: Ação: Excluir Tarefa ✨
+            if (excluirButton) {
+                const id = excluirButton.dataset.id;
+
+                // 1. Confirmação (super importante!)
+                if (!confirm("Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.")) {
+                    return; // Cancela se o usuário clicar em "Cancelar"
+                }
+
+                try {
+                    // Desabilita o botão para evitar clique duplo
+                    excluirButton.disabled = true;
+                    // Mostra um feedback visual
+                    excluirButton.innerHTML = `
+                      <svg class="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    `; // Ícone de loading
+
+                    // 2. Chama o novo endpoint DELETE no server.js
+                    const response = await fetch(`http://localhost:3000/tarefa/${id}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Falha ao excluir.');
+                    }
+
+                    // 3. Sucesso! Recarrega o histórico para mostrar a lista atualizada
+                    carregarHistorico();
+
+                } catch (error) {
+                    console.error('Erro ao excluir tarefa:', error);
+                    alert(`Erro ao excluir: ${error.message}`); // Mostra um alerta de erro
+                    // Re-habilita o botão e restaura o ícone em caso de erro
+                    excluirButton.disabled = false;
+                    excluirButton.innerHTML = `
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09 1.02-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                      </svg>
+                    `;
+                }
+            }
+        });
+
+        // --- Gatilhos dos Filtros (sem mudanças) ---
+        searchInput.addEventListener('input', carregarHistorico);
+        statusSelect.addEventListener('change', carregarHistorico);
+        sortSelect.addEventListener('change', carregarHistorico);
+
+        // Carrega o histórico na inicialização
+        document.addEventListener('DOMContentLoaded', carregarHistorico);
+    </script>
+</body>
+</html>

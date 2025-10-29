@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendador Panda</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-start justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-100">
+
+  <div class="max-w-2xl w-full bg-white p-10 rounded-3xl shadow-lg space-y-8 border border-gray-200">
+    
+    <div class="flex justify-center">
+      <img src="https://media.discordapp.net/attachments/1207833625870073857/1433084510689300620/unnamed_2.jpg?ex=69036774&is=690215f4&hm=ba163d59b4c507c4ac88afdcfa52f87cb0e2d4afbeb9fd38b00e3ea97c79f281&=&format=webp" 
+           alt="Banner Panda" 
+           class="w-full h-auto rounded-2xl shadow-md">
+    </div>
+
+    <div class="text-center">
+    <h1 class="text-3xl font-semibold tracking-tight text-gray-800 flex items-center justify-center gap-2">
+    <img src="https://i.imgur.com/kl97gq8.gif" alt="Panda GIF" class="h-20 w-auto">         <span>Vamos trabalhar vagabunda?</span>
+      </h1>
+    </div>
+    
+    <form id="formAgendamento" class="space-y-6">
+      
+      <div>
+        <label for="remetenteNome" class="block text-sm font-medium text-gray-700">
+          Nome do Remetente
+        </label>
+        <input type="text" id="remetenteNome" name="remetenteNome" required 
+               class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
+                      placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 
+                      bg-white" 
+               placeholder="Ex: Sistema de Cobrança" value="Ceo Padoloxa | Panda Indiano do Mato">
+      </div>
+
+      <div>
+        <label for="destinatario" class="block text-sm font-medium text-gray-700">
+          Email de Destino
+        </label>
+        <input type="email" id="destinatario" name="destinatario" required 
+               class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
+                      placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 
+                      bg-white" 
+               placeholder="fulano@exemplo.com" value="nay.organizada@gmail.com">
+      </div>
+
+      <div>
+        <label for="assunto" class="block text-sm font-medium text-gray-700">
+          Assunto
+        </label>
+        <input type="text" id="assunto" name="assunto" required 
+               class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
+                      placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 
+                      bg-white" 
+               placeholder="Envio da atividade de Saúde da Criança e do Adolescente">
+      </div>
+
+      <div>
+        <label for="mensagem" class="block text-sm font-medium text-gray-700">
+          Mensagem
+        </label>
+        <textarea id="mensagem" name="mensagem" rows="6" required 
+                  class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
+                         placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 
+                         bg-white"
+                  placeholder="Oi, Nayara!
+                  
+Tudo bem? Preciso que você me envie a atividade de Saúde da Criança e do Adolescente ainda hoje, com urgência."></textarea>
+      </div>
+
+      <div>
+        <label for="dataAgendada" class="block text-sm font-medium text-gray-700">
+          Data e Hora do Envio
+        </label>
+        <input type="datetime-local" id="dataAgendada" name="dataAgendada" 
+               class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
+                      focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+        <p class="mt-2 text-xs text-gray-600 italic">
+          Deixe em branco para enviar imediatamente.
+        </p>
+      </div>
+
+      <div class="flex gap-4">
+        <button type="submit" 
+                class="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white 
+                       bg-blue-500 hover:bg-blue-600 
+                       focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 transition-all duration-200">
+          ✉️ Agendar Envio
+        </button>
+        
+        <button type="button" onclick="window.open('historico.html', '_blank')" 
+                class="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium text-gray-800 
+                       bg-gray-200 hover:bg-gray-300 
+                       focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-all duration-200">
+          🕒 Ver Histórico
+        </button>
+      </div>
+    </form>
+    
+    <div id="status" class="hidden p-4 rounded-md font-medium text-center"></div>
+  </div>
+
+  <script>
+    document.getElementById('formAgendamento').addEventListener('submit', async function(e) {
+      e.preventDefault(); 
+      const data = {
+        remetenteNome: document.getElementById('remetenteNome').value, 
+        destinatario: document.getElementById('destinatario').value,
+        assunto: document.getElementById('assunto').value,
+        mensagem: document.getElementById('mensagem').value,
+        dataAgendada: document.getElementById('dataAgendada').value
+      };
+
+      const statusEl = document.getElementById('status');
+      statusEl.className = 'p-4 rounded-md font-medium text-center bg-yellow-100 text-yellow-800';
+      statusEl.textContent = 'Agendando...';
+      statusEl.classList.remove('hidden');
+
+      try {
+        // ✨✨✨ ROTA CORRIGIDA PARA A VERCEL ✨✨✨
+        const response = await fetch('/api/agendar', { // Removido 'http://localhost:3000' e adicionado '/api'
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+          statusEl.className = 'p-4 rounded-md font-medium text-center bg-green-100 text-green-800';
+          statusEl.textContent = '✅ Agendamento salvo com sucesso!';
+          document.getElementById('formAgendamento').reset();
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Falha ao salvar.');
+        }
+      } catch (error) {
+        statusEl.className = 'p-4 rounded-md font-medium text-center bg-red-100 text-red-800';
+        statusEl.textContent = '❌ Erro ao agendar: ' + error.message;
+      }
+    });
+  </script>
+</body>
+</html>

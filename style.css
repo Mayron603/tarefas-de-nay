@@ -1,0 +1,101 @@
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #f4f7f6;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+.container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 600px;
+    box-sizing: border-box;
+}
+
+h1 {
+    color: #007bff;
+    text-align: center;
+    margin-bottom: 25px;
+    font-weight: 700;
+}
+
+div {
+    margin-bottom: 18px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #555;
+}
+
+input[type="email"],
+input[type="text"],
+textarea,
+input[type="datetime-local"] {
+    width: calc(100% - 20px); /* 100% menos o padding */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box; /* Inclui padding e borda na largura total */
+}
+
+textarea {
+    resize: vertical; /* Permite redimensionar verticalmente */
+    min-height: 120px;
+}
+
+button {
+    padding: 12px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+    margin-right: 10px; /* Espaço entre os botões */
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#status {
+    margin-top: 25px;
+    padding: 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    text-align: center;
+    background-color: #e2f0d9;
+    color: #28a745;
+    display: none; /* Esconde por padrão, só mostra quando tiver mensagem */
+}
+
+/* Classes de status */
+#status.success {
+    background-color: #e2f0d9;
+    color: #28a745;
+}
+#status.error {
+    background-color: #f8d7da;
+    color: #dc3545;
+}
+
+
+.button-group {
+    display: flex;
+    justify-content: flex-start; /* Alinha os botões à esquerda */
+    margin-top: 25px;
+}
