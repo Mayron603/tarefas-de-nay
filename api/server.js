@@ -41,6 +41,7 @@ connectToDB(); // Conecta ao iniciar
 // --- 3. O SERVIDOR WEB (API) ---
 
 // Endpoint /agendar (COM /api)
+// Endpoint /agendar (COM /api)
 app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
     if (!db) {
         return res.status(500).json({ error: "Banco de dados não conectado." });
@@ -51,34 +52,41 @@ app.post('/api/agendar', async (req, res) => { // ✨ ROTA CORRIGIDA
             return res.status(400).json({ error: "Remetente, destinatário, assunto e mensagem são obrigatórios." });
         }
 
-        // --- NOVA LÓGICA DE ENVIO ---
+        // --- INÍCIO DA CORREÇÃO DE FUSO E ENVIO ---
 
-        // Se dataAgendada estiver vazia (string vazia) ou nula, é para enviar agora.
         const enviarAgora = !dataAgendada; 
+        let dataParaAgendar;
+
+        if (enviarAgora) {
+            // 1. Se for envio imediato, apenas pega a hora UTC atual
+            dataParaAgendar = new Date();
+        } else {
+            // 2. Se for agendado (ex: "2025-10-29T13:00")
+            //    Nós ADICIONAMOS o fuso horário do Brasil (-03:00)
+            //    Isso força o JS a salvar o UTC correto (16:00Z)
+            dataParaAgendar = new Date(dataAgendada + "-03:00"); 
+        }
         
-        const dataParaAgendar = dataAgendada ? new Date(dataAgendada) : new Date();
         const novoAgendamento = {
             remetenteNome,
             destinatario,
             assunto,
             mensagem,
             dataAgendada: dataParaAgendar,
-            // Se for enviar agora, o status inicial é "processando". Senão, "pendente".
             status: enviarAgora ? "processando" : "pendente", 
             criadoEm: new Date()
         };
+        // --- FIM DA CORREÇÃO ---
 
-        // 1. Salva no banco de QUALQUER JEITO
         const result = await db.collection(COLLECTION_NAME).insertOne(novoAgendamento);
         
-        // 2. Se for para enviar agora, chama o carteiro imediatamente!
         if (enviarAgora) {
             console.log("Envio imediato solicitado:", novoAgendamento.assunto);
-            // Criamos o objeto "tarefa" completo para enviar ao carteiro
             const tarefaParaEnviar = { ...novoAgendamento, _id: result.insertedId };
             await enviarEmail(tarefaParaEnviar); // Chama a função de envio
         } else {
-            console.log("Novo agendamento salvo para o futuro:", novoAgendamento.assunto);
+            // Este log agora mostrará a data UTC correta (3h a mais)
+            console.log("Agendamento salvo para o futuro:", novoAgendamento.assunto, "(UTC:", dataParaAgendar.toISOString(), ")");
         }
 
         res.status(201).json({ message: "Agendamento salvo com sucesso!" });
